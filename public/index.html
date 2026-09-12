@@ -6,4 +6,58 @@ let balance=100,busy=false;const s=["🍒","🍋","🔔","⭐","7️⃣"],$=id=>
 $("spin").onclick=()=>{if(busy)return;const bet=+$("bet").value;if(bet<1||bet>balance)return $("msg").textContent="Miză invalidă.";balance-=bet;update();busy=true;$("spin").disabled=true;$("msg").textContent="Rolele se învârt...";let n=0,t=setInterval(()=>{[$("r1"),$("r2"),$("r3")].forEach(x=>x.textContent=s[Math.floor(Math.random()*s.length)]);if(++n>=14){clearInterval(t);let a=[0,1,2].map(()=>s[Math.floor(Math.random()*s.length)]);[$("r1"),$("r2"),$("r3")].forEach((x,i)=>x.textContent=a[i]);let same=a[0]==a[1]&&a[1]==a[2],pair=new Set(a).size===2,m=same?(a[0]=="7️⃣"?50:a[0]=="⭐"?20:a[0]=="🔔"?12:a[0]=="🍒"?10:8):(pair?2:0),win=bet*m;balance+=win;update();$("msg").textContent=m?`🎉 Câștig €${win.toFixed(2)} (${m}×)`:"😔 Nu ai câștigat.";busy=false;$("spin").disabled=false}},90)};
 async function deposit(){const amount=+$("deposit").value;if(amount<1)return;$("msg").textContent="Se creează ordinul Revolut Sandbox...";try{const r=await fetch("/.netlify/functions/revolut-order",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({amount})}),d=await r.json();if(!r.ok)throw new Error(d.error||"Eroare Revolut");if(d.checkout_url)location.href=d.checkout_url;else $("msg").textContent=`Ordin Sandbox creat: ${d.id||"OK"}`}catch(e){$("msg").textContent=e.message}}
 function withdraw(){$("msg").textContent="Retragerea este simulată local. Nu se trimit bani reali."}
-</script></body></html>
+</script>
+<script>
+(function () {
+  const params = new URLSearchParams(location.search);
+
+  if (params.get("payment") === "success") {
+    const pending = Number(localStorage.getItem("pending_deposit") || "0");
+
+    if (pending > 0) {
+      const oldBalance = Number(localStorage.getItem("neon_slots_balance") || "100");
+      const newBalance = oldBalance + pending;
+
+      localStorage.setItem("neon_slots_balance", String(newBalance));
+      localStorage.removeItem("pending_deposit");
+
+      history.replaceState({}, "", location.pathname);
+
+      setTimeout(() => {
+        location.reload();
+      }, 300);
+    }
+  }
+
+  const originalFetch = window.fetch;
+
+  window.fetch = async function (...args) {
+    const response = await originalFetch.apply(this, args);
+
+    try {
+      const url = String(args[0] || "");
+
+      if (url.includes("/.netlify/functions/revolut-order")) {
+        const clone = response.clone();
+        const data = await clone.json();
+
+        if (data && data.checkout_url) {
+          const body = typeof args[1]?.body === "string"
+            ? JSON.parse(args[1].body)
+            : null;
+
+          const amount = Number(body?.amount || 0);
+
+          if (amount > 0) {
+            localStorage.setItem("pending_deposit", String(amount));
+          }
+        }
+      }
+    } catch (e) {}
+
+    return response;
+  };
+})();
+</script>
+
+</body></html>
